@@ -19,7 +19,7 @@ documentation = "https://github.com/ESultanik/advent-of-code-2025"
 repository = "https://github.com/ESultanik/advent-of-code-2025"
 
 [project.scripts]
-aoc2023 = "aoc2025.__main__:main"
+aoc2025 = "aoc2025.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
