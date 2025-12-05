@@ -31,17 +31,21 @@ The total output joltage is the sum of the maximum joltage from each bank, so in
 There are many batteries in front of you. Find the maximum joltage possible from each bank; what is the total output joltage?
 """
 
-def largest(bank: list[int]) -> int:
+def largest(bank: list[int], n: int = 2) -> int:
+    if n == 0:
+        return 0
+    elif n == 1:
+        return max(bank)
     d1 = -1
     d1_posses: list[int] = []
-    for i, d in enumerate(bank[:-1]):
+    for i, d in enumerate(bank[:-(n - 1)]):
         if i == 0 or d > d1:
             d1 = d
             d1_posses = [i]
         elif d == d1:
             d1_posses.append(i)
     possibilities: list[int] = [
-        d1 * 10 + max(bank[pos+1:])
+        d1 * 10**(n-1) + largest(bank[pos+1:], n=n-1)
         for pos in d1_posses
     ]
     return max(possibilities)
@@ -55,7 +59,45 @@ def largest(bank: list[int]) -> int:
 """, result=357)
 @challenge(day=3)
 def total_joltage(lines: list[str]) -> int:
-    total = 0
-    for line in lines:
-        total += largest([int(c) for c in line.strip()])
-    return total
+    return sum(
+        largest([int(c) for c in line.strip()])
+        for line in lines
+    )
+
+
+"""
+--- Part Two ---
+The escalator doesn't move. The Elf explains that it probably needs more joltage to overcome the static friction of the system and hits the big red "joltage limit safety override" button. You lose count of the number of times she needs to confirm "yes, I'm sure" and decorate the lobby a bit while you wait.
+
+Now, you need to make the largest joltage by turning on exactly twelve batteries within each bank.
+
+The joltage output for the bank is still the number formed by the digits of the batteries you've turned on; the only difference is that now there will be 12 digits in each bank's joltage output instead of two.
+
+Consider again the example from before:
+
+987654321111111
+811111111111119
+234234234234278
+818181911112111
+Now, the joltages are much larger:
+
+In 987654321111111, the largest joltage can be found by turning on everything except some 1s at the end to produce 987654321111.
+In the digit sequence 811111111111119, the largest joltage can be found by turning on everything except some 1s, producing 811111111119.
+In 234234234234278, the largest joltage can be found by turning on everything except a 2 battery, a 3 battery, and another 2 battery near the start to produce 434234234278.
+In 818181911112111, the joltage 888911112111 is produced by turning on everything except some 1s near the front.
+The total output joltage is now much larger: 987654321111 + 811111111119 + 434234234278 + 888911112111 = 3121910778619.
+
+What is the new total output joltage?
+"""
+
+@example("""\
+987654321111111
+811111111111119
+234234234234278
+818181911112111""", result=3121910778619)
+@challenge(day=3)
+def twelve_joltage(lines: list[str]) -> int:
+    return sum(
+        largest([int(c) for c in line.strip()], n=12)
+        for line in lines
+    )
