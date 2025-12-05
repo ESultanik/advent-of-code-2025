@@ -1,3 +1,5 @@
+from typing import Callable
+
 from . import challenge, example
 
 """
@@ -37,10 +39,20 @@ Adding up all the invalid IDs in this example produces 1227775554.
 What do you get if you add up all of the invalid IDs?
 """
 
-def is_invalid(id_str: str | int):
+def is_invalid(id_str: str | int) -> bool:
     id_str = str(id_str).strip()
     half = len(id_str) // 2
     return half > 0 and id_str[:half] == id_str[half:]
+
+
+def count_invalid(data: str, test: Callable[[str | int], bool] = is_invalid) -> int:
+    return sum(
+        id_num
+        for id_range in data.split(",")
+        for lower, upper in [map(int, id_range.split("-"))]
+        for id_num in range(lower, upper + 1)
+        if test(id_num)
+    )
 
 
 @example("""\
@@ -49,10 +61,51 @@ def is_invalid(id_str: str | int):
 824824821-824824827,2121212118-2121212124""", result=1227775554)
 @challenge(day=2)
 def gift_shop(data: str) -> int:
-    return sum(
-        id_num
-        for id_range in data.split(",")
-        for lower, upper in [map(int, id_range.split("-"))]
-        for id_num in range(lower, upper + 1)
-        if is_invalid(id_num)
-    )
+    return count_invalid(data)
+
+
+"""
+--- Part Two ---
+The clerk quickly discovers that there are still invalid IDs in the ranges in your list. Maybe the young Elf was doing other silly patterns as well?
+
+Now, an ID is invalid if it is made only of some sequence of digits repeated at least twice. So, 12341234 (1234 two times), 123123123 (123 three times), 1212121212 (12 five times), and 1111111 (1 seven times) are all invalid IDs.
+
+From the same example as before:
+
+11-22 still has two invalid IDs, 11 and 22.
+95-115 now has two invalid IDs, 99 and 111.
+998-1012 now has two invalid IDs, 999 and 1010.
+1188511880-1188511890 still has one invalid ID, 1188511885.
+222220-222224 still has one invalid ID, 222222.
+1698522-1698528 still contains no invalid IDs.
+446443-446449 still has one invalid ID, 446446.
+38593856-38593862 still has one invalid ID, 38593859.
+565653-565659 now has one invalid ID, 565656.
+824824821-824824827 now has one invalid ID, 824824824.
+2121212118-2121212124 now has one invalid ID, 2121212121.
+Adding up all the invalid IDs in this example produces 4174379265.
+
+What do you get if you add up all of the invalid IDs using these new rules?
+"""
+
+def multiple_is_invalid(id_str: str | int) -> bool:
+    id_str = str(id_str).strip()
+    half = len(id_str) // 2
+    if half <= 0:
+        return False
+    for seq_length in range(1, half + 1):
+        if len(id_str) % seq_length != 0:
+            continue
+        repeats = len(id_str) // seq_length
+        if id_str[:seq_length] * repeats == id_str:
+            return True
+    return False
+
+
+@example("""\
+11-22,95-115,998-1012,1188511880-1188511890,222220-222224,
+1698522-1698528,446443-446449,38593856-38593862,565653-565659,
+824824821-824824827,2121212118-2121212124""", result=4174379265)
+@challenge(day=2)
+def updated_gift_shop(data: str) -> int:
+    return count_invalid(data, test=multiple_is_invalid)
