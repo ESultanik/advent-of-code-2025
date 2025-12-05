@@ -1,0 +1,26 @@
+[project]
+name = "aoc2025"
+version = "0.0.1"
+description = "Evan Sultanik's Advent of Code 2025 Solutions."
+authors = [
+    {name = "Evan Sultanik", email="evan@sultanik.com"},
+]
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.13"
+
+keywords = ["puzzles"]
+
+dependencies = []
+
+[project.urls]
+homepage = "https://github.com/ESultanik/advent-of-code-2025"
+documentation = "https://github.com/ESultanik/advent-of-code-2025"
+repository = "https://github.com/ESultanik/advent-of-code-2025"
+
+[project.scripts]
+aoc2023 = "aoc2025.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
