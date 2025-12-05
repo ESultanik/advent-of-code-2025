@@ -70,12 +70,12 @@ class ChallengeWrapper(ABC):
 
     @abstractmethod
     def __call__(self, *args, **kwargs) -> Callable[[Path], Any]:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @classmethod
     @abstractmethod
     def wrap(cls: type[C], func: Callable[..., Any], signature: Signature) -> C | None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class SingleParamChallengeWrapper(Generic[T], ChallengeWrapper, ABC):
