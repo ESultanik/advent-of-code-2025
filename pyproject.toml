@@ -11,7 +11,9 @@ requires-python = ">=3.13"
 
 keywords = ["puzzles"]
 
-dependencies = []
+dependencies = [
+    "intervaltree"
+]
 
 [project.urls]
 homepage = "https://github.com/ESultanik/advent-of-code-2025"
