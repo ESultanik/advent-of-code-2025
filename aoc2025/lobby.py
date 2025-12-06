@@ -1,5 +1,3 @@
-from heapq import nlargest
-
 from . import challenge, example
 
 """
