@@ -119,3 +119,51 @@ def largest_circuits(lines: list[str], max_connected: int = 1000) -> int:
     for circuit in three_largest:
         product *= len(circuit)
     return product
+
+
+"""
+--- Part Two ---
+The Elves were right; they definitely don't have enough extension cables. You'll need to keep connecting junction boxes together until they're all in one large circuit.
+
+Continuing the above example, the first connection which causes all of the junction boxes to form a single circuit is between the junction boxes at 216,146,977 and 117,168,530. The Elves need to know how far those junction boxes are from the wall so they can pick the right extension cable; multiplying the X coordinates of those two junction boxes (216 and 117) produces 25272.
+
+Continue connecting the closest unconnected pairs of junction boxes together until they're all in the same circuit. What do you get if you multiply together the X coordinates of the last two junction boxes you need to connect?
+"""
+
+@example("""\
+162,817,812
+57,618,57
+906,360,560
+592,479,940
+352,342,300
+466,668,158
+542,29,236
+431,825,988
+739,650,466
+52,470,668
+216,146,977
+819,987,18
+117,168,530
+805,96,715
+346,949,466
+970,615,88
+941,993,340
+862,61,35
+984,92,344
+425,690,689
+""", result=25272)
+@challenge(day=8)
+def last_two(lines: list[str]) -> int:
+    points = [
+        Point3D(*map(int, line.split(',')))
+        for line in lines if line.strip()
+    ]
+    pairs: list[tuple[Point3D, Point3D]] = []
+    for p1, p2 in combinations(points, 2):
+        heapq.heappush(pairs, (p1.distance_to(p2), p1, p2))
+    connections: DisjointSet[Point3D] = DisjointSet()
+    while pairs and (len(connections) != 1 or not all(p in connections for p in points)):
+        _, p1, p2 = heapq.heappop(pairs)
+        if p1 not in connections or p2 not in connections or connections[p1] != connections[p2]:
+            connections.union(p1, p2)
+    return p1.x * p2.x
