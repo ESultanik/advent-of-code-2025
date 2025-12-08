@@ -14,10 +14,11 @@ T = TypeVar("T")
 
 
 class Example(Generic[T]):
-    def __init__(self, input_str: str, result: T, skip: bool = False):
+    def __init__(self, input_str: str, result: T, skip: bool = False, **kwargs):
         self.input_str: str = input_str
         self.result: T = result
         self.skip: bool = skip
+        self.kwargs: dict[str, Any] = kwargs
 
 
 class Challenge(Generic[T]):
@@ -36,7 +37,7 @@ class Challenge(Generic[T]):
         try:
             tmpfile.write(example.input_str)
             tmpfile.close()
-            result = self.func(Path(tmpfile.name))
+            result = self.func(Path(tmpfile.name), **example.kwargs)
             if result != example.result:
                 raise ValueError(f"Day {self.day} Part {self.part} {self.func.__name__}: example "
                                  f"expected {example.result!r} but got {result!r}")
@@ -47,6 +48,9 @@ class Challenge(Generic[T]):
         for e in self.examples:
             if not e.skip:
                 self.validate(e)
+
+    def __str__(self):
+        return self.__name__
 
 
 CHALLENGES: dict[int, dict[int, Challenge[Any]]] = {}
@@ -85,8 +89,8 @@ class SingleParamChallengeWrapper(Generic[T], ChallengeWrapper, ABC):
 
     def __call__(self, *args, **kwargs) -> Callable[[Path], Any]:
         @wraps(self.func)
-        def wrapper(path: Path) -> Any:
-            return self.func(self.convert(path))
+        def wrapper(path: Path, **kwargs2) -> Any:
+            return self.func(self.convert(path), **kwargs2)
 
         return wrapper
 
@@ -101,9 +105,14 @@ class SingleParamChallengeWrapper(Generic[T], ChallengeWrapper, ABC):
 
     @classmethod
     def wrap(cls: type[C], func: Callable[..., Any], signature: Signature) -> C | None:
-        if len(signature.parameters) != 1:
+        required_args = [
+            param
+            for param in signature.parameters.values()
+            if param.default is inspect.Parameter.empty
+        ]
+        if len(required_args) != 1:
             return None
-        _, param = next(iter(signature.parameters.items()))
+        param = required_args[0]
         if cls.validate(param):
             return cls(func=func, signature=signature, param=param)
         else:
@@ -167,12 +176,12 @@ def challenge(day: int, part: int | None = None):
     return wrapper
 
 
-def example(input_str: str, result: T, skip: bool = False) -> Callable[[Challenge[T]], Challenge[T]]:
+def example(input_str: str, result: T, skip: bool = False, **kwargs) -> Callable[[Challenge[T]], Challenge[T]]:
     def wrapper(func: Challenge[T]) -> Challenge[T]:
         if not isinstance(func, Challenge):
             raise TypeError(f"@example can only be used on a Challenge"
                             f"or a function annotated with @challenge, not {func!r}")
-        func.examples = [Example(input_str=input_str, result=result, skip=skip)] + func.examples
+        func.examples = [Example(input_str=input_str, result=result, skip=skip, **kwargs)] + func.examples
         return func
 
     return wrapper
