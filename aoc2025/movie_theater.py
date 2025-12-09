@@ -137,7 +137,7 @@ class Point2D:
         return abs(self.x - other.x) + abs(self.y - other.y)
 
     def rectangle_area(self, other: Self) -> int:
-        return abs(self.x - other.x + 1) * abs(self.y - other.y + 1)
+        return (abs(self.x - other.x) + 1) * (abs(self.y - other.y) + 1)
 
     def __str__(self):
         return f"({self.x}, {self.y})"
