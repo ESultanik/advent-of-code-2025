@@ -85,9 +85,58 @@ from . import challenge, example
 class RectilinearPolygon:
     points: tuple[Point2D, ...]
 
+    @property
+    def min_x(self) -> int:
+        return min(p.x for p in self.points)
+
+    @property
+    def max_x(self) -> int:
+        return max(p.x for p in self.points)
+
+    @property
+    def min_y(self) -> int:
+        return min(p.y for p in self.points)
+
+    @property
+    def max_y(self) -> int:
+        return max(p.y for p in self.points)
+
     def __contains__(self, point: Point2D | RectilinearPolygon) -> bool:
         if isinstance(point, RectilinearPolygon):
-            return all(p in self for p in point.points)
+            # Check all corners are inside
+            if not all(p in self for p in point.points):
+                return False
+            # Assume the polygon is a rectangle!
+
+            # For rectangles, also check that no edge of self passes through
+            # the strict interior of the rectangle
+            rect_min_x = point.min_x
+            rect_max_x = point.max_x
+            rect_min_y = point.min_y
+            rect_max_y = point.max_y
+
+            n = len(self.points)
+            for i in range(n):
+                p1 = self.points[i]
+                p2 = self.points[(i + 1) % n]
+
+                if p1.x == p2.x:  # Vertical edge
+                    edge_x = p1.x
+                    edge_y_min = min(p1.y, p2.y)
+                    edge_y_max = max(p1.y, p2.y)
+                    # Check if this vertical edge passes through interior
+                    if rect_min_x < edge_x < rect_max_x:
+                        if edge_y_min < rect_max_y and edge_y_max > rect_min_y:
+                            return False
+                else:  # Horizontal edge
+                    edge_y = p1.y
+                    edge_x_min = min(p1.x, p2.x)
+                    edge_x_max = max(p1.x, p2.x)
+                    # Check if this horizontal edge passes through interior
+                    if rect_min_y < edge_y < rect_max_y:
+                        if edge_x_min < rect_max_x and edge_x_max > rect_min_x:
+                            return False
+            return True
 
         n = len(self.points)
         inside = False
@@ -170,7 +219,7 @@ def smallest(heap: list[T]) -> Iterator[T]:
 """, result=50)
 @challenge(day=9)
 def largest_area(lines: list[str]) -> int:
-    points: list[tuple[int, int]] = [
+    points: list[Point2D] = [
         Point2D(*(int(n) for n in line.split(',')))
         for line in lines
         if line.strip()
