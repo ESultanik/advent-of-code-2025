@@ -131,44 +131,142 @@ So, the fewest button presses required to correctly configure the joltage level 
 Analyze each machine's joltage requirements and button wiring schematics. What is the fewest button presses required to correctly configure the joltage level counters on all of the machines?
 """
 
-import heapq
+from collections import defaultdict
+import math
+
+
+def sums_of(numbers: Iterable[int], limit: int | None = None):
+    """
+    Yield all non-negative integers that can be expressed as a sum
+    of elements from numbers (with repetition), in ascending order.
+
+    Example: sums_of([3, 5]) yields 0, 3, 5, 6, 8, 9, 10, 11, 12, ...
+             (note: 1, 2, 4, 7 are not representable)
+    """
+    nums = sorted({n for n in numbers if n > 0})
+    if not nums:
+        yield 0
+        return
+
+    # Only multiples of GCD are representable
+    g = math.gcd(*nums)
+    normalized = [n // g for n in nums]
+    smallest = normalized[0]
+
+    # If 1 is in the normalized set, all non-negative multiples of g work
+    if smallest == 1:
+        val = 0
+        while limit is None or val < limit:
+            yield val
+            val += g
+        return
+
+    # DP up to Frobenius bound: once we see 'smallest' consecutive
+    # representable numbers, all beyond are representable
+    bound = smallest * (smallest - 1)  # Known upper bound for Frobenius number
+
+    reachable = [False] * (bound + smallest + 1)
+    reachable[0] = True
+
+    for val in range(1, len(reachable)):
+        for n in normalized:
+            if n <= val and reachable[val - n]:
+                reachable[val] = True
+                break
+
+    # Find the actual Frobenius number (largest non-representable)
+    frobenius = -1
+    for i in range(len(reachable) - 1, -1, -1):
+        if not reachable[i]:
+            frobenius = i
+            break
+
+    # Yield representable values
+    i = 0
+    while True:
+        actual_val = i * g
+        if limit is not None and actual_val >= limit:
+            break
+
+        if i <= frobenius:
+            if reachable[i]:
+                yield actual_val
+        else:
+            yield actual_val  # Beyond Frobenius: all representable
+        i += 1
+
 
 def min_xor_subset_with_constraints(buttons: Iterable[int], joltage: Iterable[int]) -> int:
     joltage = tuple(joltage)
-    new_buttons: list[tuple[int, ...]] = []
+    required_bits_per_counter = int(math.log2(max(joltage)) + 0.5) + 1  # one extra bit for a canary
+    new_buttons: list[int] = []
     for button in buttons:
-        new_button: list[int] = []
+        new_button: int = 0
         digit = 0
         while button:
             if button & 0b1:
-                new_button.append(digit)
+                new_button |= 0b1 << (required_bits_per_counter * digit)
             button >>= 1
             digit += 1
-        new_buttons.append(tuple(new_button))
-    joltage_sum = sum(joltage)
-    queue: list[tuple[int, tuple[int, ...], int]] = [
-        (
-            joltage_sum,
-            (0,) * len(joltage),
-            0
-        )
-    ]
-    while queue:
-        h, current_joltage, presses = heapq.heappop(queue)
-        for button in new_buttons:
-            next_joltage: list[int] | tuple[int, ...] = list(current_joltage)
-            added = 0
-            for index in button:
-                added += 1
-                next_joltage[index] += 1
-                if next_joltage[index] > joltage[index]:
-                    break
-            else:
-                next_joltage = tuple(next_joltage)
-                if next_joltage == joltage:
-                    return presses + 1
-                heapq.heappush(queue, (h - added, next_joltage, presses + 1))
-    raise ValueError("No solution!")
+        new_buttons.append(new_button)
+    new_joltage = 0
+    for digit, j in enumerate(joltage):
+        new_joltage |= j << (required_bits_per_counter * digit)
+
+    # we can now model this as a coin change problem
+
+    if new_joltage == 0:
+        return 0
+
+    # Filter out zeros (they don't help reach new_joltage)
+    denominations = [button for button in buttons if button > 0]
+
+    assert len(denominations) > 0
+
+    # dp[v] = minimum coefficients summing to v
+    infinity = new_joltage * 2
+    dp: dict[int, int] = defaultdict(lambda: infinity)
+    dp[0] = 0
+
+    canary_mask = 0
+    for _ in range(len(joltage)):
+        canary_mask <<= required_bits_per_counter
+        canary_mask |= 0b1 << (required_bits_per_counter - 1)
+
+    #for v in range(step, new_joltage + 1, step):
+    for v in sums_of(denominations, limit=new_joltage + 1):
+        if v & canary_mask or v == 0:
+            continue
+        for button in denominations:
+            if button <= v and dp[v - button] + 1 < dp[v]:
+                dp[v] = dp[v - button] + 1
+        if new_joltage % v == 0 and dp[v] < infinity:
+            return dp[v] * (new_joltage // v)
+
+    if dp[new_joltage] >= infinity:
+        raise ValueError("No solution!")
+
+    return dp[new_joltage]
+
+    presses: dict[int, int] = {0: 0}
+    canary_mask = 0
+    for _ in range(len(joltage)):
+        canary_mask <<= required_bits_per_counter
+        canary_mask |= 0b1 << (required_bits_per_counter - 1)
+    changed = True
+    while changed:
+        changed = False
+        for button in buttons:
+            for v, cost in list(presses.items()):
+                new_v = v + button
+                if canary_mask & v:
+                    continue
+                changed = True
+                if new_v not in presses or presses[new_v] > cost + 1:
+                    presses[new_v] = cost + 1
+    if new_joltage not in presses:
+        raise ValueError("No solution!")
+    return presses[new_joltage]
 
 
 @example("""\
