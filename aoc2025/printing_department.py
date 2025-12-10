@@ -224,19 +224,7 @@ Stop once no more rolls of paper are accessible by a forklift. In this example, 
 Start with your original diagram. How many rolls of paper in total can be removed by the Elves and their forklifts?
 """
 
-@example("""\
-..@@.@@@@.
-@@@.@.@.@@
-@@@@@.@.@@
-@.@@@@..@.
-@@.@@@@.@@
-.@@@@@@@.@
-.@.@.@.@@@
-@.@@@.@@@@
-.@@@@@@@@.
-@.@.@@@.@.
-""", result=43)
-@challenge(day=4)
+@challenge.next(result=43)
 def total_removed(lines: list[str]) -> int:
     grid: list[list[str]] = [list(line) for line in lines]
 

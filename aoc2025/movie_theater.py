@@ -302,17 +302,7 @@ Using two red tiles as opposite corners, what is the largest area of any rectang
 """
 
 
-@example("""\
-7,1
-11,1
-11,7
-9,7
-9,5
-2,5
-2,3
-7,3
-""", result=24)
-@challenge(day=9)
+@challenge.next(result=24)
 def red_green(lines: list[str]) -> int:
     polygon = RectilinearPolygon(tuple(
         Point2D(*(int(n) for n in line.split(',')))

@@ -88,12 +88,7 @@ The total output joltage is now much larger: 987654321111 + 811111111119 + 43423
 What is the new total output joltage?
 """
 
-@example("""\
-987654321111111
-811111111111119
-234234234234278
-818181911112111""", result=3121910778619)
-@challenge(day=3)
+@challenge.next(result=3121910778619)
 def twelve_joltage(lines: list[str]) -> int:
     return sum(
         largest([int(c) for c in line.strip()], n=12)

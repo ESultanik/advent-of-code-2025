@@ -89,20 +89,7 @@ The ingredient IDs that these ranges consider to be fresh are 3, 4, 5, 10, 11, 1
 Process the database file again. How many ingredient IDs are considered to be fresh according to the fresh ingredient ID ranges?
 """
 
-@example("""\
-3-5
-10-14
-16-20
-12-18
-
-1
-5
-8
-11
-17
-32
-""", result=14)
-@challenge(day=5)
+@challenge.next(result=14)
 def total_fresh(lines: list[str]) -> int:
     fresh = IntervalTree()
     for line in lines:

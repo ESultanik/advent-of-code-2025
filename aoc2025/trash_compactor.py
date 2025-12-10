@@ -106,13 +106,7 @@ def column(lines: list[str], col: int) -> str:
     return "".join(get_col(line, col) for line in lines)
 
 
-@example("""\
-123 328  51 64 
- 45 64  387 23 
-  6 98  215 314
-*   +   *   +  
-""", result=3263827)
-@challenge(day=6)
+@challenge.next(result=3263827)
 def grand_total(lines: list[str]) -> int:
     total = 0
     longest_line = max((len(line.strip()) for line in lines))

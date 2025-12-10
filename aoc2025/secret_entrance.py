@@ -116,19 +116,7 @@ Be careful: if the dial were pointing at 50, a single rotation like R1000 would 
 Using password method 0x434C49434B, what is the password to open the door?
 """
 
-@example("""\
-L68
-L30
-R48
-L5
-R60
-L55
-L1
-L99
-R14
-L82
-""", result=6)
-@challenge(day=1)
+@challenge.next(result=6)
 def password_method(lines: list[str]) -> int:
     n = 50
     times_zero = 0

@@ -163,12 +163,7 @@ def solve_machine(buttons: list[int], joltage: list[int]):
     raise ValueError("No solution!")
 
 
-@example("""\
-[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
-[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
-[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
-""", result=33)
-@challenge(day=10)
+@challenge.next(result=33)
 @regex(r"\s*\[(?P<lights>[\.#]+)\]\s+(?P<buttons>(\(\d+(,\d+)*\)\s+)+)\s*\{(?P<joltage>\d+(,\d+)*)\}\s*")
 def fewest_presses(lines: list[re.Match[str]]) -> int:
     return sum(

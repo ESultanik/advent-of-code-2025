@@ -152,6 +152,9 @@ class DataWrapper(SingleParamChallengeWrapper[str]):
         return param.name == "data" and (param.annotation is None or param.annotation is str)
 
 
+_last_day: int | None = None
+
+
 def challenge(day: int, part: int | None = None):
     if day in CHALLENGES:
         existing_day = CHALLENGES[day]
@@ -162,6 +165,8 @@ def challenge(day: int, part: int | None = None):
         part = len(existing_day)
     elif part in existing_day:
         raise ValueError(f"Day {day} part {part} is already assigned to {existing_day[part].__name__}")
+    global _last_day
+    _last_day = day
 
     def wrapper(func: Callable[[Any], T]) -> Challenge[T]:
         sig = inspect.signature(func)
@@ -176,7 +181,13 @@ def challenge(day: int, part: int | None = None):
     return wrapper
 
 
+_last_example: str | None = None
+
+
 def example(input_str: str, result: T, skip: bool = False, **kwargs) -> Callable[[Challenge[T]], Challenge[T]]:
+    global _last_example
+    _last_example = input_str
+
     def wrapper(func: Challenge[T]) -> Challenge[T]:
         if not isinstance(func, Challenge):
             raise TypeError(f"@example can only be used on a Challenge"
@@ -204,6 +215,20 @@ def regex(
 
     return wrapper
 
+
+def next_part(result: T, skip: bool = False, **kwargs) -> Callable[[Challenge[T]], Challenge[T]]:
+    if _last_example is None:
+        raise ValueError("@next_part can only be used after a previous @example")
+    elif _last_day is None:
+        raise ValueError("@next_part can only be used after a previous @challenge")
+
+    def wrapper(func: Callable[[Any], T]) -> Challenge[T]:
+        return example(_last_example, result=result, skip=skip, **kwargs)(challenge(day=_last_day)(func))
+
+    return wrapper
+
+
+challenge.next: Callable[[Challenge[T]], Challenge[T]] = next_part
 
 # Automatically load all modules in the `aoc2023` package
 package_dir = Path(__file__).resolve().parent
