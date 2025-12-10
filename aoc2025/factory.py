@@ -47,7 +47,7 @@ Analyze each machine's indicator light diagram and button wiring schematics. Wha
 """
 
 import re
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from . import challenge, example, regex
 
@@ -63,15 +63,7 @@ def min_xor_subset(buttons: Iterable[int], target: int) -> int:
     return presses[target]
 
 
-@example("""\
-[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
-[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
-[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
-""", result=7)
-@challenge(day=10)
-@regex(r"\s*\[(?P<lights>[\.#]+)\]\s+(?P<buttons>(\(\d+(,\d+)*\)\s+)+)\s*\{(?P<joltage>\d+(,\d+)*)\}\s*")
-def fewest_presses(lines: list[re.Match[str]]) -> int:
-    total = 0
+def parse_lines(lines: list[re.Match[str]]) -> Iterator[tuple[list[int], int, list[int]]]:
     for match in lines:
         if not match:
             continue
@@ -90,5 +82,104 @@ def fewest_presses(lines: list[re.Match[str]]) -> int:
             for press in button.split(","):
                 button_value |= 0b1 << int(press)
             buttons.append(button_value)
-        total += min_xor_subset(buttons, target_value)
-    return total
+        yield buttons, target_value, [int(j) for j in match.group("joltage").split(",")]
+
+
+@example("""\
+[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
+[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
+[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
+""", result=7)
+@challenge(day=10)
+@regex(r"\s*\[(?P<lights>[\.#]+)\]\s+(?P<buttons>(\(\d+(,\d+)*\)\s+)+)\s*\{(?P<joltage>\d+(,\d+)*)\}\s*")
+def fewest_presses(lines: list[re.Match[str]]) -> int:
+    return sum(
+        min_xor_subset(buttons, total)
+        for buttons, total, _ in parse_lines(lines)
+    )
+
+
+"""
+--- Part Two ---
+All of the machines are starting to come online! Now, it's time to worry about the joltage requirements.
+
+Each machine needs to be configured to exactly the specified joltage levels to function properly. Below the buttons on each machine is a big lever that you can use to switch the buttons from configuring the indicator lights to increasing the joltage levels. (Ignore the indicator light diagrams.)
+
+The machines each have a set of numeric counters tracking its joltage levels, one counter per joltage requirement. The counters are all initially set to zero.
+
+So, joltage requirements like {3,5,4,7} mean that the machine has four counters which are initially 0 and that the goal is to simultaneously configure the first counter to be 3, the second counter to be 5, the third to be 4, and the fourth to be 7.
+
+The button wiring schematics are still relevant: in this new joltage configuration mode, each button now indicates which counters it affects, where 0 means the first counter, 1 means the second counter, and so on. When you push a button, each listed counter is increased by 1.
+
+So, a button wiring schematic like (1,3) means that each time you push that button, the second and fourth counters would each increase by 1. If the current joltage levels were {0,1,2,3}, pushing the button would change them to be {0,2,2,4}.
+
+You can push each button as many times as you like. However, your finger is getting sore from all the button pushing, and so you will need to determine the fewest total presses required to correctly configure each machine's joltage level counters to match the specified joltage requirements.
+
+Consider again the example from before:
+
+[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
+[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
+[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
+Configuring the first machine's counters requires a minimum of 10 button presses. One way to do this is by pressing (3) once, (1,3) three times, (2,3) three times, (0,2) once, and (0,1) twice.
+
+Configuring the second machine's counters requires a minimum of 12 button presses. One way to do this is by pressing (0,2,3,4) twice, (2,3) five times, and (0,1,2) five times.
+
+Configuring the third machine's counters requires a minimum of 11 button presses. One way to do this is by pressing (0,1,2,3,4) five times, (0,1,2,4,5) five times, and (1,2) once.
+
+So, the fewest button presses required to correctly configure the joltage level counters on all of the machines is 10 + 12 + 11 = 33.
+
+Analyze each machine's joltage requirements and button wiring schematics. What is the fewest button presses required to correctly configure the joltage level counters on all of the machines?
+"""
+
+import heapq
+
+def min_xor_subset_with_constraints(buttons: Iterable[int], joltage: Iterable[int]) -> int:
+    joltage = tuple(joltage)
+    new_buttons: list[tuple[int, ...]] = []
+    for button in buttons:
+        new_button: list[int] = []
+        digit = 0
+        while button:
+            if button & 0b1:
+                new_button.append(digit)
+            button >>= 1
+            digit += 1
+        new_buttons.append(tuple(new_button))
+    joltage_sum = sum(joltage)
+    queue: list[tuple[int, tuple[int, ...], int]] = [
+        (
+            joltage_sum,
+            (0,) * len(joltage),
+            0
+        )
+    ]
+    while queue:
+        h, current_joltage, presses = heapq.heappop(queue)
+        for button in new_buttons:
+            next_joltage: list[int] | tuple[int, ...] = list(current_joltage)
+            added = 0
+            for index in button:
+                added += 1
+                next_joltage[index] += 1
+                if next_joltage[index] > joltage[index]:
+                    break
+            else:
+                next_joltage = tuple(next_joltage)
+                if next_joltage == joltage:
+                    return presses + 1
+                heapq.heappush(queue, (h - added, next_joltage, presses + 1))
+    raise ValueError("No solution!")
+
+
+@example("""\
+[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
+[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
+[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
+""", result=33)
+@challenge(day=10)
+@regex(r"\s*\[(?P<lights>[\.#]+)\]\s+(?P<buttons>(\(\d+(,\d+)*\)\s+)+)\s*\{(?P<joltage>\d+(,\d+)*)\}\s*")
+def fewest_presses(lines: list[re.Match[str]]) -> int:
+    return sum(
+        min_xor_subset_with_constraints(buttons, joltage)
+        for buttons, total, joltage in parse_lines(lines)
+    )
