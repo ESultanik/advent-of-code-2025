@@ -131,142 +131,36 @@ So, the fewest button presses required to correctly configure the joltage level 
 Analyze each machine's joltage requirements and button wiring schematics. What is the fewest button presses required to correctly configure the joltage level counters on all of the machines?
 """
 
-from collections import defaultdict
-import math
+from z3 import Int, Optimize, sat, Sum
 
 
-def sums_of(numbers: Iterable[int], limit: int | None = None):
-    """
-    Yield all non-negative integers that can be expressed as a sum
-    of elements from numbers (with repetition), in ascending order.
+def solve_machine(buttons: list[int], joltage: list[int]):
+    opt = Optimize()
 
-    Example: sums_of([3, 5]) yields 0, 3, 5, 6, 8, 9, 10, 11, 12, ...
-             (note: 1, 2, 4, 7 are not representable)
-    """
-    nums = sorted({n for n in numbers if n > 0})
-    if not nums:
-        yield 0
-        return
+    # one integer variable per button (number of presses)
+    presses = [Int(f'btn_{i}') for i in range(len(buttons))]
 
-    # Only multiples of GCD are representable
-    g = math.gcd(*nums)
-    normalized = [n // g for n in nums]
-    smallest = normalized[0]
+    # can't press negative times
+    for p in presses:
+        opt.add(p >= 0)
 
-    # If 1 is in the normalized set, all non-negative multiples of g work
-    if smallest == 1:
-        val = 0
-        while limit is None or val < limit:
-            yield val
-            val += g
-        return
+    # Each counter must reach its target
+    for counter_idx, target in enumerate(joltage):
+        # Sum of presses for buttons that affect this counter
+        affecting = [presses[j] for j, btn in enumerate(buttons) if (0b1 << counter_idx) & btn]
+        if affecting:
+            opt.add(Sum(affecting) == target)
+        elif target != 0:
+            raise ValueError(f"Impossible! No button affects counter {counter_idx}.")
 
-    # DP up to Frobenius bound: once we see 'smallest' consecutive
-    # representable numbers, all beyond are representable
-    bound = smallest * (smallest - 1)  # Known upper bound for Frobenius number
+    # minimize total presses
+    opt.minimize(Sum(presses))
 
-    reachable = [False] * (bound + smallest + 1)
-    reachable[0] = True
+    if opt.check() == sat:
+        model = opt.model()
+        return sum(model[p].as_long() for p in presses)
 
-    for val in range(1, len(reachable)):
-        for n in normalized:
-            if n <= val and reachable[val - n]:
-                reachable[val] = True
-                break
-
-    # Find the actual Frobenius number (largest non-representable)
-    frobenius = -1
-    for i in range(len(reachable) - 1, -1, -1):
-        if not reachable[i]:
-            frobenius = i
-            break
-
-    # Yield representable values
-    i = 0
-    while True:
-        actual_val = i * g
-        if limit is not None and actual_val >= limit:
-            break
-
-        if i <= frobenius:
-            if reachable[i]:
-                yield actual_val
-        else:
-            yield actual_val  # Beyond Frobenius: all representable
-        i += 1
-
-
-def min_xor_subset_with_constraints(buttons: Iterable[int], joltage: Iterable[int]) -> int:
-    joltage = tuple(joltage)
-    required_bits_per_counter = int(math.log2(max(joltage)) + 0.5) + 1  # one extra bit for a canary
-    new_buttons: list[int] = []
-    for button in buttons:
-        new_button: int = 0
-        digit = 0
-        while button:
-            if button & 0b1:
-                new_button |= 0b1 << (required_bits_per_counter * digit)
-            button >>= 1
-            digit += 1
-        new_buttons.append(new_button)
-    new_joltage = 0
-    for digit, j in enumerate(joltage):
-        new_joltage |= j << (required_bits_per_counter * digit)
-
-    # we can now model this as a coin change problem
-
-    if new_joltage == 0:
-        return 0
-
-    # Filter out zeros (they don't help reach new_joltage)
-    denominations = [button for button in buttons if button > 0]
-
-    assert len(denominations) > 0
-
-    # dp[v] = minimum coefficients summing to v
-    infinity = new_joltage * 2
-    dp: dict[int, int] = defaultdict(lambda: infinity)
-    dp[0] = 0
-
-    canary_mask = 0
-    for _ in range(len(joltage)):
-        canary_mask <<= required_bits_per_counter
-        canary_mask |= 0b1 << (required_bits_per_counter - 1)
-
-    #for v in range(step, new_joltage + 1, step):
-    for v in sums_of(denominations, limit=new_joltage + 1):
-        if v & canary_mask or v == 0:
-            continue
-        for button in denominations:
-            if button <= v and dp[v - button] + 1 < dp[v]:
-                dp[v] = dp[v - button] + 1
-        if new_joltage % v == 0 and dp[v] < infinity:
-            return dp[v] * (new_joltage // v)
-
-    if dp[new_joltage] >= infinity:
-        raise ValueError("No solution!")
-
-    return dp[new_joltage]
-
-    presses: dict[int, int] = {0: 0}
-    canary_mask = 0
-    for _ in range(len(joltage)):
-        canary_mask <<= required_bits_per_counter
-        canary_mask |= 0b1 << (required_bits_per_counter - 1)
-    changed = True
-    while changed:
-        changed = False
-        for button in buttons:
-            for v, cost in list(presses.items()):
-                new_v = v + button
-                if canary_mask & v:
-                    continue
-                changed = True
-                if new_v not in presses or presses[new_v] > cost + 1:
-                    presses[new_v] = cost + 1
-    if new_joltage not in presses:
-        raise ValueError("No solution!")
-    return presses[new_joltage]
+    raise ValueError("No solution!")
 
 
 @example("""\
@@ -278,6 +172,6 @@ def min_xor_subset_with_constraints(buttons: Iterable[int], joltage: Iterable[in
 @regex(r"\s*\[(?P<lights>[\.#]+)\]\s+(?P<buttons>(\(\d+(,\d+)*\)\s+)+)\s*\{(?P<joltage>\d+(,\d+)*)\}\s*")
 def fewest_presses(lines: list[re.Match[str]]) -> int:
     return sum(
-        min_xor_subset_with_constraints(buttons, joltage)
+        solve_machine(buttons, joltage)
         for buttons, total, joltage in parse_lines(lines)
     )
