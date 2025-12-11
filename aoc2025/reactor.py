@@ -87,6 +87,17 @@ def count_paths(edges: Iterable[tuple[T, T]], source: T, sink: T) -> int:
     return paths[sink]
 
 
+def parse_edges(lines: list[str]) -> list[tuple[str, str]]:
+    edges: list[tuple[str, str]] = []
+    for line in lines:
+        colon_pos = line.index(":")
+        assert colon_pos > 0
+        from_node = line[:colon_pos].strip()
+        for to_node in line[colon_pos + 1:].strip().split(" "):
+            edges.append((from_node, to_node))
+    return edges
+
+
 @example("""\
 aaa: you hhh
 you: bbb ccc
@@ -101,11 +112,43 @@ iii: out
 """, result=5)
 @challenge(day=11)
 def different_paths(lines: list[str]) -> int:
-    edges: list[tuple[str, str]] = []
-    for line in lines:
-        colon_pos = line.index(":")
-        assert colon_pos > 0
-        from_node = line[:colon_pos].strip()
-        for to_node in line[colon_pos + 1:].strip().split(" "):
-            edges.append((from_node, to_node))
-    return count_paths(edges, "you", "out")
+    return count_paths(parse_edges(lines), "you", "out")
+
+
+def edges_without(edges: Iterable[tuple[T, T]], *nodes: T) -> list[tuple[T, T]]:
+    nodes = frozenset(nodes)
+    return [
+        (from_node, to_node)
+        for from_node, to_node in edges
+        if from_node not in nodes and to_node not in nodes
+    ]
+
+
+@example("""\
+svr: aaa bbb
+aaa: fft
+fft: ccc
+bbb: tty
+tty: ccc
+ccc: ddd eee
+ddd: hub
+hub: fff
+eee: dac
+dac: fff
+fff: ggg hhh
+ggg: out
+hhh: out
+""", result=2)
+@challenge(day=11)
+def dac_fft(lines: list[str]) -> int:
+    edges = parse_edges(lines)
+    # first, calculate how many paths pass through neither dac nor fft
+    paths_without_dac_fft = count_paths(edges_without(edges, "dac", "fft"), "svr", "out")
+    # next, calculate how many paths pass through just dac
+    paths_through_just_dac = count_paths(edges_without(edges, "fft"), "svr", "out") \
+                             - paths_without_dac_fft
+    # finally, calculate how many paths pass through just fft
+    paths_through_just_fft = count_paths(edges_without(edges, "dac"), "svr", "out") \
+                             - paths_without_dac_fft
+    return count_paths(parse_edges(lines), "svr", "out") - paths_without_dac_fft \
+           - paths_through_just_dac - paths_through_just_fft
