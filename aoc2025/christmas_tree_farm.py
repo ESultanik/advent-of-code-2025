@@ -86,6 +86,7 @@ Consider the regions beneath each tree and the presents the Elves would like to 
 
 from dataclasses import dataclass
 import re
+import z3
 
 from . import challenge, example
 
@@ -274,6 +275,96 @@ def parse_input(lines: list[str]) -> tuple[dict[int, Polyomino], list[Region]]:
     return shapes, regions
 
 
+class Z3Packer:
+    """Z3-based polyomino packer."""
+
+    def __init__(self, shapes: dict[int, Polyomino], verbose: bool = False) -> None:
+        self.shapes = shapes
+        self.shape_areas = {sid: s.area for sid, s in shapes.items()}
+        self.verbose = verbose
+
+        self.orientations: dict[int, list[frozenset[Coord]]] = {}
+        for shape_id, shape in shapes.items():
+            self.orientations[shape_id] = [o.cells for o in shape.all_orientations()]
+
+    def can_pack(self, region: Region) -> bool:
+        """Check if pieces can be packed using Z3."""
+        # Quick area check
+        total_area = sum(
+            self.shape_areas[sid] * cnt
+            for sid, cnt in region.required_pieces.items()
+            if sid in self.shapes
+        )
+        if total_area > region.area:
+            return False
+
+        if all(c == 0 for c in region.required_pieces.values()):
+            return True
+
+        # Generate all placements: (shape_id, cells as tuple of flat indices)
+        placements: list[tuple[int, tuple[int, ...]]] = []
+
+        for shape_id, cnt in region.required_pieces.items():
+            if cnt <= 0 or shape_id not in self.orientations:
+                continue
+
+            for cells in self.orientations[shape_id]:
+                pw = max(c.x for c in cells) + 1
+                ph = max(c.y for c in cells) + 1
+
+                for py in range(region.height - ph + 1):
+                    for px in range(region.width - pw + 1):
+                        flat = tuple((c.y + py) * region.width + (c.x + px) for c in cells)
+                        placements.append((shape_id, flat))
+
+        if self.verbose:
+            print(f"    {len(placements)} placements")
+
+        # Create Z3 solver and variables
+        solver = z3.Solver()
+
+        # One boolean variable per placement
+        placement_vars = [z3.Bool(f"p_{i}") for i in range(len(placements))]
+
+        # Group placements by shape
+        placements_by_shape: dict[int, list] = {sid: [] for sid, cnt in region.required_pieces.items() if cnt > 0}
+        for i, (sid, _) in enumerate(placements):
+            placements_by_shape[sid].append(placement_vars[i])
+
+        # Constraint 1: Exactly region.required_pieces[shape_id] placements per shape
+        # Using PbEq (pseudo-boolean equality): sum of vars == count
+        for shape_id, count in region.required_pieces.items():
+            if count <= 0:
+                continue
+            shape_vars = placements_by_shape[shape_id]
+
+            if len(shape_vars) < count:
+                return False
+
+            # PbEq takes list of (var, weight) pairs and a target sum
+            solver.add(z3.PbEq([(v, 1) for v in shape_vars], count))
+
+        # Constraint 2: Each cell covered by at most one placement
+        # Using PbLe (pseudo-boolean less-or-equal): sum of vars <= 1
+        cell_placements: dict[int, list] = {}
+        for i, (_, cells) in enumerate(placements):
+            for c in cells:
+                if c not in cell_placements:
+                    cell_placements[c] = []
+                cell_placements[c].append(placement_vars[i])
+
+        for cell, vars_covering in cell_placements.items():
+            if len(vars_covering) > 1:
+                solver.add(z3.PbLe([(v, 1) for v in vars_covering], 1))
+
+        if self.verbose:
+            print(f"    {len(placement_vars)} variables, {len(required) + len(cell_placements)} constraints")
+
+        # Solve
+        result = solver.check()
+        return result == z3.sat
+
+
 @example("""\
 0:
 ###
@@ -312,20 +403,21 @@ def parse_input(lines: list[str]) -> tuple[dict[int, Polyomino], list[Region]]:
 @challenge(day=12)
 def num_regions(lines: list[str]) -> int:
     shapes, regions = parse_input(lines)
-    packer = PolyominoPacker(shapes)
+    # packer = PolyominoPacker(shapes)
+    packer = Z3Packer(shapes)
 
-    # packable_count = 0
-    # for i, region in enumerate(regions):
-    #     if packer.can_pack(region):
-    #         packable_count += 1
-    #         print(f"Region {i + 1} ({region.width}x{region.height}): ✓ CAN pack")
-    #     else:
-    #         print(f"Region {i + 1} ({region.width}x{region.height}): ✗ cannot pack")
-    #
-    # return packable_count
+    packable_count = 0
+    for i, region in enumerate(regions):
+        if packer.can_pack(region):
+            packable_count += 1
+            print(f"Region {i + 1} ({region.width}x{region.height}): ✓ CAN pack")
+        else:
+            print(f"Region {i + 1} ({region.width}x{region.height}): ✗ cannot pack")
 
-    return sum(
-        1
-        for region in regions
-        if packer.can_pack(region)
-    )
+    return packable_count
+
+    # return sum(
+    #     1
+    #     for region in regions
+    #     if packer.can_pack(region)
+    # )
