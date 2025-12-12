@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Self
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, unsafe_hash=True)
 class Coord:
     """An immutable 2D coordinate."""
 

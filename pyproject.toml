@@ -12,8 +12,10 @@ requires-python = ">=3.13"
 keywords = ["puzzles"]
 
 dependencies = [
-    "intervaltree",
-    "z3-solver"
+    "intervaltree~=3.1.0",
+    "python-sat~=1.8.dev24",
+    "rich~=14.2.0",
+    "z3-solver~=4.15.4.0"
 ]
 
 [project.urls]

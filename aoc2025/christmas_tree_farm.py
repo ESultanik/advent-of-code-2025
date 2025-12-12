@@ -86,6 +86,8 @@ Consider the regions beneath each tree and the presents the Elves would like to 
 
 from dataclasses import dataclass
 import re
+
+import pysat
 import z3
 
 from . import challenge, example
@@ -275,9 +277,12 @@ def parse_input(lines: list[str]) -> tuple[dict[int, Polyomino], list[Region]]:
     return shapes, regions
 
 
-class Z3Packer:
-    """Z3-based polyomino packer."""
+from pysat.solvers import Solver
+from pysat.card import CardEnc, EncType
+from pysat.formula import CNF, IDPool
 
+
+class SATPacker:
     def __init__(self, shapes: dict[int, Polyomino], verbose: bool = False) -> None:
         self.shapes = shapes
         self.shape_areas = {sid: s.area for sid, s in shapes.items()}
@@ -288,7 +293,6 @@ class Z3Packer:
             self.orientations[shape_id] = [o.cells for o in shape.all_orientations()]
 
     def can_pack(self, region: Region) -> bool:
-        """Check if pieces can be packed using Z3."""
         # Quick area check
         total_area = sum(
             self.shape_areas[sid] * cnt
@@ -304,11 +308,19 @@ class Z3Packer:
         # Generate all placements: (shape_id, cells as tuple of flat indices)
         placements: list[tuple[int, tuple[int, ...]]] = []
 
+        previous_shapes: set[frozenset[Coord]] = set()
+
         for shape_id, cnt in region.required_pieces.items():
             if cnt <= 0 or shape_id not in self.orientations:
                 continue
 
             for cells in self.orientations[shape_id]:
+                if cells in previous_shapes:
+                    if self.verbose:
+                        print(f"Pruned orientation for shape {shape_id}")
+                    continue
+                previous_shapes.add(cells)
+
                 pw = max(c.x for c in cells) + 1
                 ph = max(c.y for c in cells) + 1
 
@@ -320,49 +332,48 @@ class Z3Packer:
         if self.verbose:
             print(f"    {len(placements)} placements")
 
-        # Create Z3 solver and variables
-        solver = z3.Solver()
+        pool = IDPool()
+        cnf = CNF()
 
-        # One boolean variable per placement
-        placement_vars = [z3.Bool(f"p_{i}") for i in range(len(placements))]
+        placement_vars = [pool.id(('p', i)) for i in range(len(placements))]
 
-        # Group placements by shape
-        placements_by_shape: dict[int, list] = {sid: [] for sid, cnt in region.required_pieces.items() if cnt > 0}
+        # Group by shape
+        placements_by_shape: dict[int, list[int]] = {sid: [] for sid, cnt in region.required_pieces.items() if cnt > 0}
         for i, (sid, _) in enumerate(placements):
             placements_by_shape[sid].append(placement_vars[i])
 
-        # Constraint 1: Exactly region.required_pieces[shape_id] placements per shape
-        # Using PbEq (pseudo-boolean equality): sum of vars == count
+        # Exactly N of each shape
         for shape_id, count in region.required_pieces.items():
             if count <= 0:
                 continue
             shape_vars = placements_by_shape[shape_id]
-
             if len(shape_vars) < count:
                 return False
+            clauses = CardEnc.equals(
+                lits=shape_vars, bound=count, vpool=pool, encoding=EncType.seqcounter
+            )
+            cnf.extend(clauses.clauses)
 
-            # PbEq takes list of (var, weight) pairs and a target sum
-            solver.add(z3.PbEq([(v, 1) for v in shape_vars], count))
-
-        # Constraint 2: Each cell covered by at most one placement
-        # Using PbLe (pseudo-boolean less-or-equal): sum of vars <= 1
-        cell_placements: dict[int, list] = {}
+        # At most one per cell
+        cell_placements: dict[int, list[int]] = {}
         for i, (_, cells) in enumerate(placements):
             for c in cells:
                 if c not in cell_placements:
                     cell_placements[c] = []
                 cell_placements[c].append(placement_vars[i])
 
-        for cell, vars_covering in cell_placements.items():
+        for vars_covering in cell_placements.values():
             if len(vars_covering) > 1:
-                solver.add(z3.PbLe([(v, 1) for v in vars_covering], 1))
+                clauses = CardEnc.atmost(
+                    lits=vars_covering, bound=1, vpool=pool, encoding=EncType.seqcounter
+                )
+                cnf.extend(clauses.clauses)
 
-        if self.verbose:
-            print(f"    {len(placement_vars)} variables, {len(required) + len(cell_placements)} constraints")
+        with Solver(name='cadical153', bootstrap_with=cnf) as solver:
+            return solver.solve()
 
-        # Solve
-        result = solver.check()
-        return result == z3.sat
+
+from rich.progress import track
 
 
 @example("""\
@@ -404,20 +415,20 @@ class Z3Packer:
 def num_regions(lines: list[str]) -> int:
     shapes, regions = parse_input(lines)
     # packer = PolyominoPacker(shapes)
-    packer = Z3Packer(shapes)
+    packer = SATPacker(shapes)
 
-    packable_count = 0
-    for i, region in enumerate(regions):
-        if packer.can_pack(region):
-            packable_count += 1
-            print(f"Region {i + 1} ({region.width}x{region.height}): ✓ CAN pack")
-        else:
-            print(f"Region {i + 1} ({region.width}x{region.height}): ✗ cannot pack")
+    # packable_count = 0
+    # for i, region in enumerate(track(regions, description="regions")):
+    #     if packer.can_pack(region):
+    #         packable_count += 1
+    #         print(f"Region {i + 1} ({region.width}x{region.height}): ✓ CAN pack")
+    #     else:
+    #         print(f"Region {i + 1} ({region.width}x{region.height}): ✗ cannot pack")
+    #
+    # return packable_count
 
-    return packable_count
-
-    # return sum(
-    #     1
-    #     for region in regions
-    #     if packer.can_pack(region)
-    # )
+    return sum(
+        1
+        for region in track(regions, description="regions")
+        if packer.can_pack(region)
+    )
